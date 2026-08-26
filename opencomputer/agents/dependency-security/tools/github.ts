@@ -6,6 +6,7 @@ import {
   useSecret,
 } from "@opencomputer/agent";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -96,12 +97,33 @@ export type AuthoritativeAlert = {
   headSha: string;
 };
 
-function checkoutPath(): string {
-  return resolve(REPOSITORY_ROOT, `${owner}--${repository}`);
+function sessionKey(sessionId: string): string {
+  return createHash("sha256").update(sessionId).digest("hex").slice(0, 24);
 }
 
-function baselinePath(): string {
-  return resolve(BASELINE_ROOT, `${owner}--${repository}`);
+function checkoutPath(sessionId: string): string {
+  return resolve(REPOSITORY_ROOT, `${owner}--${repository}--${sessionKey(sessionId)}`);
+}
+
+function baselinePath(sessionId: string): string {
+  return resolve(BASELINE_ROOT, `${owner}--${repository}--${sessionKey(sessionId)}`);
+}
+
+export function assertMaterializedAlert(
+  sessionId: string,
+  alertNumberValue: unknown,
+  headShaValue: unknown,
+): void {
+  const materialized = materializedAlerts.get(sessionId);
+  if (!materialized) {
+    throw new Error("No materialized alert snapshot is available in this session.");
+  }
+  if (
+    materialized.alertNumber !== alertNumber(alertNumberValue) ||
+    materialized.headSha !== commitSha(headShaValue)
+  ) {
+    throw new Error("The alert does not match this session's materialized snapshot.");
+  }
 }
 
 async function githubResponse(path: string, init?: RequestInit, allowNotFound = false): Promise<Response | undefined> {
@@ -240,8 +262,8 @@ export const materializeConfiguredRepository = defineTool({
     if (metadata!.id !== TARGET_REPOSITORY.repositoryId || head!.object.sha !== ref) {
       throw new Error("Requested snapshot is not the current configured default-branch head");
     }
-    const destination = checkoutPath();
-    const baseline = baselinePath();
+    const destination = checkoutPath(sessionId);
+    const baseline = baselinePath(sessionId);
     const temporary = await mkdtemp(join(tmpdir(), "dependency-security-repository-"));
     const archive = join(temporary, "repository.tar.gz");
     await reportProgress({ status: "downloading", repository: `${owner}/${repository}`, ref });
@@ -282,13 +304,7 @@ export const openSecurityPullRequest = defineTool({
   },
   async run({ input, sessionId, signal, reportProgress }): Promise<DataValue> {
     const baseSha = commitSha(input.baseSha);
-    const materialized = materializedAlerts.get(sessionId);
-    if (!materialized) {
-      throw new Error("No materialized alert snapshot is available in this session.");
-    }
-    if (materialized.alertNumber !== Number(input.alertNumber) || materialized.headSha !== baseSha) {
-      throw new Error("The requested alert and head do not match this session's materialized snapshot.");
-    }
+    assertMaterializedAlert(sessionId, input.alertNumber, baseSha);
     const validated = await readValidatedAlert(input.alertNumber, signal);
     if (validated.headSha !== baseSha) throw new Error("Default branch advanced after analysis; restart from the new head");
     const body = String(input.body).trim();
@@ -297,8 +313,8 @@ export const openSecurityPullRequest = defineTool({
     }
     const branch = `security/${validated.ghsa.toLowerCase()}-${baseSha.slice(0, 12)}`;
     const audit = await auditNpmDependencyUpdate({
-      baselineRoot: baselinePath(),
-      workingRoot: checkoutPath(),
+      baselineRoot: baselinePath(sessionId),
+      workingRoot: checkoutPath(sessionId),
       manifestPath: TARGET_REPOSITORY.manifestPath,
       lockfilePath: TARGET_REPOSITORY.lockfilePath,
       packageName: validated.packageName,

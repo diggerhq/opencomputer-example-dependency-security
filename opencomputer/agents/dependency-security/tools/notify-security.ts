@@ -1,7 +1,7 @@
 import { defineTool, publishOutbox } from "@opencomputer/agent";
 import { TARGET_REPOSITORY } from "../config.js";
 import { securityAssessmentContent } from "../assessment.js";
-import { readAuthoritativeAlert } from "./github.js";
+import { assertMaterializedAlert, readAuthoritativeAlert } from "./github.js";
 
 type Disposition = "not-exposed" | "needs-review";
 
@@ -24,6 +24,7 @@ export const notifySecurity = defineTool({
   async run({ input, sessionId, signal }) {
     const authoritative = await readAuthoritativeAlert(input.alertNumber, signal);
     const alert = authoritative.alert;
+    assertMaterializedAlert(sessionId, alert.number, authoritative.headSha);
     const content = securityAssessmentContent({
       ...input,
       cve: alert.security_advisory.cve_id ?? "",
