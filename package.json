@@ -1,0 +1,27 @@
+{
+  "name": "opencomputer-example-dependency-security",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "opencomputer": "opencomputer",
+    "dev": "opencomputer deploy --watch",
+    "build": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.ts",
+    "session": "opencomputer session",
+    "deploy": "opencomputer deploy"
+  },
+  "dependencies": {
+    "@opencomputer/agent": "^0.5.2",
+    "semver": "^7.7.2"
+  },
+  "devDependencies": {
+    "@opencomputer/cli": "^0.6.5",
+    "@types/node": "^24.0.0",
+    "@types/semver": "^7.7.1",
+    "typescript": "^5.9.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}
