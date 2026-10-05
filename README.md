@@ -101,8 +101,9 @@ Store the returned values in the target repository as:
 - `OPENCOMPUTER_WEBHOOK_TOKEN`
 
 Also store the collector token as `DEPENDABOT_READ_TOKEN`. Copy
-`.github/workflows/collect-dependabot-alerts.yml` to the target repository's
-default branch. It polls every 15 minutes and can be run manually. Unchanged
+`templates/collect-dependabot-alerts.yml` to the target repository's
+`.github/workflows/` directory. It polls every 15 minutes and can be run
+manually. Unchanged
 alerts reuse a stable idempotency key, so repeated polls do not start duplicate
 sessions. GitHub may delay scheduled workflows; this example does not promise
 instant delivery.
